@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Teacher Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet" />
+  <style>
+    * {
+      box-sizing: border-box;
+      transition: all 0.3s ease;
+    }
+
+    body {
+      font-family: 'Poppins', sans-serif;
+      background: linear-gradient(to right, #ff6ec4, #7873f5);
+      color: white;
+      padding: 20px;
+      margin: 0;
+    }
+
+    h1, h2 {
+      text-align: center;
+      font-weight: 600;
+    }
+
+    form, table, .attendance-controls {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 30px;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+    }
+
+    input, button, select {
+      padding: 10px;
+      margin: 5px;
+      border-radius: 8px;
+      border: none;
+      font-size: 14px;
+      font-family: 'Poppins', sans-serif;
+    }
+
+    input, select {
+      width: 180px;
+    }
+
+    button {
+      background: #00c6ff;
+      color: white;
+      cursor: pointer;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+
+    button:hover {
+      background: #0072ff;
+    }
+
+    table {
+      width: 100%;
+      color: white;
+      border-collapse: collapse;
+    }
+
+    th, td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    th {
+      background-color: #5f2c82;
+      color: white;
+    }
+
+    ::placeholder {
+      color: #999;
+    }
+
+    label {
+      font-weight: 500;
+    }
+
+    #studentSection h2 {
+      margin-bottom: 10px;
+    }
+
+    .table-scroll {
+      max-height: 300px;
+      overflow-y: auto;
+      margin-top: 10px;
+    }
+
+    .table-scroll::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .table-scroll::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.3);
+      border-radius: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Teacher Dashboard</h1>
+
+  <!-- Add Student Form -->
+  <form id="addStudentForm">
+    <h2>Add Student</h2>
+    <input type="text" id="studentId" placeholder="Student ID" required />
+    <input type="text" id="name" placeholder="Student Name" required />
+    <input type="text" id="semester" placeholder="Semester" required />
+    <button type="submit">Add Student</button>
+  </form>
+
+  <!-- Live Search Student -->
+  <div class="attendance-controls">
+    <h2>Live Search Student by ID</h2>
+    <input type="text" id="searchInput" placeholder="Enter Student ID" oninput="liveSearchStudent()" />
+    <p id="searchResult"></p>
+  </div>
+
+  <!-- Attendance Controls -->
+  <div class="attendance-controls">
+    <h2>Take Attendance</h2>
+    <label for="attendanceDate">Select Date:</label>
+    <input type="date" id="attendanceDate" required />
+    <button onclick="submitAttendance()">Submit Attendance</button>
+  </div>
+
+  <!-- Students Table -->
+  <div id="studentSection">
+    <h2>Students</h2>
+    <div class="table-scroll">
+      <table id="studentsTable">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Name</th>
+            <th>Semester</th>
+            <th>Attendance</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    const STUDENT_API = 'http://localhost:5000/api/students';
+    const ATTENDANCE_API = 'http://localhost:5000/api/attendance';
+    let studentsList = [];
+
+    async function fetchStudents() {
+      const response = await fetch(STUDENT_API);
+      let students = await response.json();
+      students.sort((a, b) => a.studentId.localeCompare(b.studentId));
+      studentsList = students;
+      displayStudents(students);
+    }
+
+    function displayStudents(students) {
+      const table = document.querySelector("#studentsTable tbody");
+      table.innerHTML = "";
+      students.forEach(student => {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${student.studentId}</td>
+          <td>${student.name}</td>
+          <td>${student.semester}</td>
+          <td>
+            <select>
+              <option value="Present">Present</option>
+              <option value="Absent">Absent</option>
+            </select>
+          </td>
+          <td><button onclick="deleteStudent('${student._id}')">Delete</button></td>
+        `;
+        table.appendChild(row);
+      });
+    }
+
+    document.getElementById("addStudentForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const studentData = {
+        studentId: document.getElementById("studentId").value,
+        name: document.getElementById("name").value,
+        semester: document.getElementById("semester").value,
+      };
+      const response = await fetch(STUDENT_API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(studentData),
+      });
+      if (response.ok) {
+        alert("Student added successfully!");
+        e.target.reset();
+        fetchStudents();
+      } else {
+        const err = await response.json();
+        alert("Error: " + (err.error || "Could not add student."));
+      }
+    });
+
+    async function deleteStudent(id) {
+      const confirmed = confirm("Are you sure you want to delete this student?");
+      if (!confirmed) return;
+      const res = await fetch(`${STUDENT_API}/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        alert("Student deleted.");
+        fetchStudents();
+      } else {
+        alert("Failed to delete student.");
+      }
+    }
+
+    async function submitAttendance() {
+      const selectedDate = document.getElementById("attendanceDate").value;
+      if (!selectedDate) {
+        alert("Please select a date for attendance.");
+        return;
+      }
+      const rows = document.querySelectorAll("#studentsTable tbody tr");
+      const records = [];
+      rows.forEach(row => {
+        const studentId = row.children[0].textContent;
+        const name = row.children[1].textContent;
+        const status = row.querySelector("select").value;
+        records.push({ studentId, name, status });
+      });
+      const attendanceData = { date: selectedDate, records: records };
+      const response = await fetch(ATTENDANCE_API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(attendanceData)
+      });
+      if (response.ok) {
+        alert("Attendance submitted successfully!");
+        generateCSV(records, selectedDate);
+      } else {
+        const err = await response.json();
+        alert("Failed to submit attendance: " + (err.error || "Unknown error"));
+      }
+    }
+
+    function generateCSV(data, date) {
+      let csv = "Student ID,Name,Status\n";
+      data.forEach(row => {
+        csv += `${row.studentId},${row.name},${row.status}\n`;
+      });
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const now = new Date();
+      const timeStr = `${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}`;
+      const filename = `Attendance_${date}_${timeStr}.csv`;
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+
+    function binarySearch(arr, targetId) {
+      let left = 0, right = arr.length - 1;
+      while (left <= right) {
+        const mid = Math.floor((left + right) / 2);
+        const midId = arr[mid].studentId;
+        if (midId === targetId) {
+          return arr[mid];
+        } else if (midId < targetId) {
+          left = mid + 1;
+        } else {
+          right = mid - 1;
+        }
+      }
+      return null;
+    }
+
+    function liveSearchStudent() {
+      const input = document.getElementById("searchInput").value.trim();
+      const resultBox = document.getElementById("searchResult");
+      if (input === "") {
+        resultBox.textContent = "";
+        displayStudents(studentsList);
+        return;
+      }
+      const found = binarySearch(studentsList, input);
+      if (found) {
+        resultBox.textContent = `✅ Found: ${found.name} (Semester: ${found.semester})`;
+        displayStudents([found]);
+      } else {
+        resultBox.textContent = "❌ Student not found.";
+        displayStudents([]);
+      }
+    }
+
+    fetchStudents();
+  </script>
+</body>
+</html>
